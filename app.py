@@ -28,6 +28,19 @@ SAO_PAULO = [-23.5505, -46.6333]
 ALTURA_MAPA = 720
 TIPOS_FOTO = ["jpg", "jpeg", "png", "webp", "heic", "heif"]
 
+_CARTO = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+_OSM = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+_ESRI = "Tiles &copy; Esri"
+# (nome no seletor, URL dos tiles, atribuição) — o primeiro é o padrão
+ESTILOS_MAPA = [
+    ("Colorido suave", "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", _CARTO),
+    ("Claro minimalista", "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", _CARTO),
+    ("Escuro", "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", _CARTO),
+    ("Satélite", "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", _ESRI),
+    ("Ruas (Esri)", "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", _ESRI),
+    ("OpenStreetMap clássico", "https://tile.openstreetmap.org/{z}/{x}/{y}.png", _OSM),
+]
+
 # --------------------------------------------------------------------------- #
 # Configuração e login
 # --------------------------------------------------------------------------- #
@@ -140,7 +153,12 @@ def local_no_ponto(lat: float, lng: float) -> dict | None:
 # --------------------------------------------------------------------------- #
 # Mapa (área principal)
 # --------------------------------------------------------------------------- #
-mapa = folium.Map(location=SAO_PAULO, zoom_start=12, control_scale=True)
+mapa = folium.Map(location=SAO_PAULO, zoom_start=12, control_scale=True, tiles=None)
+for i, (nome_estilo, url, atribuicao) in enumerate(ESTILOS_MAPA):
+    folium.TileLayer(
+        tiles=url, attr=atribuicao, name=nome_estilo, max_zoom=19, show=(i == 0)
+    ).add_to(mapa)
+folium.LayerControl(position="topright", collapsed=True).add_to(mapa)
 pinos = folium.FeatureGroup(name="locais")
 for loc in locais:
     if not visivel(loc):
@@ -205,22 +223,25 @@ def painel_padrao() -> None:
     busca = st.text_input(
         "🔎 Buscar lugar",
         key="busca",
-        placeholder="Ex.: Pinacoteca, Beco do Batman, Torre Eiffel",
+        placeholder="Ex.: Bar Brahma, Pinacoteca, Torre Eiffel",
     )
     if busca.strip():
+        lat, lng = ss.centro
         with st.spinner("Buscando…"):
-            resultados = geo.buscar(busca.strip())
+            # prioriza resultados perto da última região vista no mapa
+            resultados = geo.buscar(busca.strip(), round(lat, 2), round(lng, 2))
         if not resultados:
-            st.info("Nada encontrado. Tente outro nome ou um endereço.")
+            st.info("Nada encontrado. Tente outro nome, o nome + bairro, ou clique no mapa.")
         for i, r in enumerate(resultados):
+            rotulo = f"{r['emoji']} {r['nome']}" + (f" · {r['regiao']}" if r["regiao"] else "")
             st.button(
-                f"📍 {r['nome']}",
+                rotulo,
                 key=f"res_{i}",
                 help=r["endereco"],
                 on_click=escolher_resultado,
                 args=(r,),
             )
-    st.caption("…ou clique direto no mapa para marcar um ponto.")
+    st.caption("Dica: nome + bairro ajuda (ex.: \"Bar Pinheiros\"). Ou clique direto no mapa.")
 
     st.divider()
     contagem = {s: sum(1 for loc in locais if loc["status"] == s) for s in STATUS}
