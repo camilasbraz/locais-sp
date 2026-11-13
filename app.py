@@ -28,17 +28,29 @@ SAO_PAULO = [-23.5505, -46.6333]
 ALTURA_MAPA = 720
 TIPOS_FOTO = ["jpg", "jpeg", "png", "webp", "heic", "heif"]
 
-_CARTO = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-_OSM = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+_ESRI_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/{}/MapServer/tile/{{z}}/{{y}}/{{x}}"
 _ESRI = "Tiles &copy; Esri"
-# (nome no seletor, URL dos tiles, atribuição) — o primeiro é o padrão
+_OSM = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+_HOT = _OSM + ", tiles: Humanitarian OSM Team / OSM France"
+# Estilos gratuitos e sem chave. Cada estilo tem uma ou mais camadas
+# (url, atribuição, zoom máximo com imagem própria); o primeiro é o padrão.
 ESTILOS_MAPA = [
-    ("Colorido suave", "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", _CARTO),
-    ("Claro minimalista", "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", _CARTO),
-    ("Escuro", "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", _CARTO),
-    ("Satélite", "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", _ESRI),
-    ("Ruas (Esri)", "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", _ESRI),
-    ("OpenStreetMap clássico", "https://tile.openstreetmap.org/{z}/{x}/{y}.png", _OSM),
+    ("Claro com detalhes", [(_ESRI_URL.format("World_Topo_Map"), _ESRI, 18)]),
+    ("Minimalista cinza", [
+        (_ESRI_URL.format("Canvas/World_Light_Gray_Base"), _ESRI, 16),
+        (_ESRI_URL.format("Canvas/World_Light_Gray_Reference"), _ESRI, 16),
+    ]),
+    ("Escuro", [
+        (_ESRI_URL.format("Canvas/World_Dark_Gray_Base"), _ESRI, 16),
+        (_ESRI_URL.format("Canvas/World_Dark_Gray_Reference"), _ESRI, 16),
+    ]),
+    ("Satélite", [
+        (_ESRI_URL.format("World_Imagery"), _ESRI, 19),
+        (_ESRI_URL.format("Reference/World_Boundaries_and_Places"), _ESRI, 19),
+    ]),
+    ("Colorido (OpenStreetMap)", [("https://tile.openstreetmap.org/{z}/{x}/{y}.png", _OSM, 19)]),
+    ("Pastel (OSM Humanitário)", [("https://a.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png", _HOT, 18)]),
+    ("Ruas estilo GPS", [(_ESRI_URL.format("World_Street_Map"), _ESRI, 18)]),
 ]
 
 # --------------------------------------------------------------------------- #
@@ -153,11 +165,15 @@ def local_no_ponto(lat: float, lng: float) -> dict | None:
 # --------------------------------------------------------------------------- #
 # Mapa (área principal)
 # --------------------------------------------------------------------------- #
-mapa = folium.Map(location=SAO_PAULO, zoom_start=12, control_scale=True, tiles=None)
-for i, (nome_estilo, url, atribuicao) in enumerate(ESTILOS_MAPA):
-    folium.TileLayer(
-        tiles=url, attr=atribuicao, name=nome_estilo, max_zoom=19, show=(i == 0)
-    ).add_to(mapa)
+mapa = folium.Map(location=SAO_PAULO, zoom_start=12, control_scale=True, tiles=None, max_zoom=19)
+for i, (nome_estilo, camadas) in enumerate(ESTILOS_MAPA):
+    # cada estilo é um grupo "base" (overlay=False): o seletor troca o grupo inteiro
+    grupo = folium.FeatureGroup(name=nome_estilo, overlay=False, show=(i == 0))
+    for url, atribuicao, zoom_nativo in camadas:
+        folium.TileLayer(
+            tiles=url, attr=atribuicao, max_zoom=19, max_native_zoom=zoom_nativo
+        ).add_to(grupo)
+    grupo.add_to(mapa)
 folium.LayerControl(position="topright", collapsed=True).add_to(mapa)
 pinos = folium.FeatureGroup(name="locais")
 for loc in locais:
