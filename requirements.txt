@@ -1,0 +1,12 @@
+streamlit>=1.40
+streamlit-folium>=0.22
+folium>=0.17
+gspread>=6.0
+google-api-python-client>=2.100
+google-auth>=2.20
+google-auth-oauthlib>=1.0
+geopy>=2.4
+bcrypt>=4.0
+pillow>=10.0
+pillow-heif>=0.16
+tzdata
