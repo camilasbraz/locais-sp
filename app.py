@@ -1,6 +1,7 @@
 """Locais para visitar: mapa compartilhado de lugares para conhecer."""
 
 import datetime as dt
+import urllib.parse
 import uuid
 
 import folium
@@ -235,6 +236,20 @@ elif clique_mapa and clique_mapa != ss.prev_clk:
 # --------------------------------------------------------------------------- #
 # Painéis do sidebar
 # --------------------------------------------------------------------------- #
+def ajuda_google_maps(busca: str, achou_algo: bool) -> None:
+    """Passo a passo para trazer um lugar do Google Maps quando a busca não acha."""
+    url = "https://www.google.com/maps/search/?api=1&query=" + urllib.parse.quote(busca)
+    titulo = "Não é nenhum desses? Pegue no Google Maps:" if achou_algo else "Pegue no Google Maps:"
+    with st.container(border=True):
+        st.markdown(f"**{titulo}**")
+        st.link_button(f"1. Abrir “{busca}” no Google Maps ↗", url)
+        st.markdown(
+            "2. Escolha o lugar e toque em **Compartilhar → Copiar link**\n\n"
+            "3. Volte aqui e **cole o link** no campo de busca acima"
+        )
+        st.caption("Ou feche esta busca e clique direto no mapa, no ponto exato.")
+
+
 def painel_padrao() -> None:
     busca = st.text_input(
         "🔎 Buscar lugar",
@@ -243,11 +258,24 @@ def painel_padrao() -> None:
     )
     if busca.strip():
         lat, lng = ss.centro
-        with st.spinner("Buscando…"):
-            # prioriza resultados perto da última região vista no mapa
-            resultados = geo.buscar(busca.strip(), round(lat, 2), round(lng, 2))
-        if not resultados:
-            st.info("Nada encontrado. Tente outro nome, o nome + bairro, ou clique no mapa.")
+        link = geo.link_google(busca)
+        if link:
+            with st.spinner("Lendo o link do Google Maps…"):
+                achado = geo.de_link_google(link, round(lat, 2), round(lng, 2))
+            if achado is None:
+                st.warning("Não consegui abrir esse link. Confira se ele é do Google Maps.")
+                resultados = []
+            elif achado["lat"] is None:
+                st.info(f"Achei **{achado['nome']}**, mas não a posição. Clique no mapa onde ele fica.")
+                resultados = []
+            else:
+                resultados = [achado]
+        else:
+            with st.spinner("Buscando…"):
+                # prioriza resultados perto da última região vista no mapa
+                resultados = geo.buscar(busca.strip(), round(lat, 2), round(lng, 2))
+            if not resultados:
+                st.warning(f"Não encontrei **{busca.strip()}** por aqui.")
         for i, r in enumerate(resultados):
             rotulo = f"{r['emoji']} {r['nome']}" + (f" · {r['regiao']}" if r["regiao"] else "")
             st.button(
@@ -257,7 +285,10 @@ def painel_padrao() -> None:
                 on_click=escolher_resultado,
                 args=(r,),
             )
-    st.caption("Dica: nome + bairro ajuda (ex.: \"Bar Pinheiros\"). Ou clique direto no mapa.")
+        if not link:
+            ajuda_google_maps(busca.strip(), achou_algo=bool(resultados))
+    else:
+        st.caption("Digite o nome do lugar ou clique direto no mapa.")
 
     st.divider()
     contagem = {s: sum(1 for loc in locais if loc["status"] == s) for s in STATUS}
